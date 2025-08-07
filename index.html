@@ -83,7 +83,7 @@
         ? (data.UnitCodes.length <= 2 ? `${data.UnitCodes.join(" | ")} ${data.ClusterName}` : `${data.ClusterName}`)
         : `${data.UnitCodes[0]} ${data.UnitName}`;
       const qual = [data.QualificationCode, data.Stream].filter(Boolean).join(" ");
-      const suffix = [data.Campus, data.Semester ? `Semester ${data.Semester.slice(1)}` : null, data.Year].filter(Boolean).join(" ");
+      const suffix = [data.Campus, data.Semester ? `S ${data.Semester.slice(1)}` : null, data.Year].filter(Boolean).join(" ");
       return `${qual} || ${unitSection} – ${suffix}`;
     }
   </script>
