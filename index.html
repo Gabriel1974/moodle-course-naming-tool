@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Moodle Course Name Generator</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: auto; padding: 2em; }
+    label { display: block; margin: 0.5em 0; }
+    input { width: 100%; padding: 0.5em; }
+    button { margin-top: 1em; padding: 0.5em 1em; }
+    pre { background: #f0f0f0; padding: 1em; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Moodle Course Name Generator</h1>
+  <form id="courseForm" onsubmit="event.preventDefault();">
+    <label>Qualification Code: <input id="qual" required></label>
+    <label>Stream: <input id="stream"></label>
+    <label>Unit Code(s) (comma separated): <input id="units" required></label>
+    <label>Unit Name (if single): <input id="unitName"></label>
+    <label>Cluster Name (if cluster): <input id="cluster"></label>
+    <label>Campus: <input id="campus"></label>
+    <label>Semester: <input id="semester"></label>
+    <label>Year: <input id="year" required></label>
+    <button type="button" onclick="generateNames()">Generate</button>
+    <button type="button" onclick="decodeShortName()">Decode SN</button>
+  </form>
+  <pre id="output"></pre>
+
+  <script>
+    function generateNames() {
+      const data = getFormData();
+      if (!data.QualificationCode || !data.UnitCodes.length || !data.Year || (!data.UnitName && !data.ClusterName)) {
+        document.getElementById("output").textContent = "Error: Missing required fields.";
+        return;
+      }
+      const sn = generateShortName(data);
+      const fn = generateFullName(data);
+      document.getElementById("output").textContent = `Short Name: ${sn}\nFull Name: ${fn}`;
+    }
+
+    function decodeShortName() {
+      const sn = prompt("Enter short name to decode:");
+      if (!sn || !sn.includes("||")) {
+        document.getElementById("output").textContent = "Error: Invalid short name format.";
+        return;
+      }
+      const [left, right] = sn.split("||");
+      const [qualCode, stream] = left.includes("-") ? left.split("-") : [left, null];
+      const parts = right.split("-");
+      const year = parts.pop();
+      let semester = null, campus = null;
+      if (["S1", "S2"].includes(parts[parts.length - 1])) semester = parts.pop();
+      if (parts.length > 1) campus = parts.pop();
+      const unitCodes = parts.join("-").split("_");
+
+      document.getElementById("output").textContent = `Decoded:\nQualificationCode: ${qualCode}\nStream: ${stream || ""}\nUnitCodes: ${unitCodes.join(", ")}\nCampus: ${campus || ""}\nSemester: ${semester || ""}\nYear: ${year}`;
+    }
+
+    function getFormData() {
+      return {
+        QualificationCode: document.getElementById("qual").value.trim(),
+        Stream: document.getElementById("stream").value.trim() || null,
+        UnitCodes: document.getElementById("units").value.trim().split(",").map(u => u.trim()).filter(Boolean),
+        UnitName: document.getElementById("unitName").value.trim() || null,
+        ClusterName: document.getElementById("cluster").value.trim() || null,
+        Campus: document.getElementById("campus").value.trim() || null,
+        Semester: document.getElementById("semester").value.trim() || null,
+        Year: document.getElementById("year").value.trim()
+      };
+    }
+
+    function generateShortName(data) {
+      const qual = data.QualificationCode + (data.Stream ? `-${data.Stream}` : "");
+      const units = data.UnitCodes.join("_");
+      const right = [units, data.Campus, data.Semester, data.Year].filter(Boolean).join("-");
+      return `${qual}||${right}`;
+    }
+
+    function generateFullName(data) {
+      const cluster = data.UnitCodes.length > 1;
+      const unitSection = cluster
+        ? `${data.UnitCodes.join(", ")} ${data.ClusterName}`
+        : `${data.UnitCodes[0]} ${data.UnitName}`;
+      const qual = [data.QualificationCode, data.Stream].filter(Boolean).join(" ");
+      const suffix = [data.Campus, data.Semester ? `Semester ${data.Semester.slice(1)}` : null, data.Year].filter(Boolean).join(" ");
+      return `${qual} || ${unitSection} – ${suffix}`;
+    }
+  </script>
+</body>
+</html>
