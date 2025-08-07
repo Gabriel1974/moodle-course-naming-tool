@@ -22,8 +22,8 @@
     <label>Campus: <input id="campus"></label>
     <label>Semester: <input id="semester"></label>
     <label>Year: <input id="year" required></label>
-    <button type="button" onclick="generateNames()">Generate Names</button>
-    <button type="button" onclick="decodeShortName()">Decode ShortName</button>
+    <button type="button" onclick="generateNames()">Generate</button>
+    <button type="button" onclick="decodeShortName()">Decode SN</button>
   </form>
   <pre id="output"></pre>
 
@@ -80,7 +80,7 @@
     function generateFullName(data) {
       const cluster = data.UnitCodes.length > 1;
       const unitSection = cluster
-        ? `${data.UnitCodes.join(", ")} ${data.ClusterName}`
+        ? (data.UnitCodes.length <= 2 ? `${data.UnitCodes.join(" | ")} ${data.ClusterName}` : `${data.ClusterName}`)
         : `${data.UnitCodes[0]} ${data.UnitName}`;
       const qual = [data.QualificationCode, data.Stream].filter(Boolean).join(" ");
       const suffix = [data.Campus, data.Semester ? `Semester ${data.Semester.slice(1)}` : null, data.Year].filter(Boolean).join(" ");
@@ -89,3 +89,4 @@
   </script>
 </body>
 </html>
+
