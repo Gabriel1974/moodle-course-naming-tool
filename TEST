@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Moodle Course Name Generator</title>
+  <style>
+    body { font-family: sans-serif; max-width: 720px; margin: auto; padding: 2em; }
+    label { display: block; margin: 0.5em 0; }
+    input { width: 100%; padding: 0.5em; }
+    fieldset { border: 1px solid #ddd; padding: 1em; margin-top: 1em; }
+    legend { padding: 0 0.5em; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    button { margin-top: 1em; padding: 0.6em 1.1em; }
+    pre { background: #f6f8fa; padding: 1em; white-space: pre-wrap; border: 1px solid #eee; }
+    .hide { display:none; }
+  </style>
+</head>
+<body>
+  <h1>Moodle Course Name Generator</h1>
+  <form id="courseForm" onsubmit="event.preventDefault();">
+    <div class="row">
+      <label>Qualification Code: <input id="qual" required></label>
+      <label>Stream: <input id="stream" placeholder="e.g. SBAT"></label>
+      <label>Unit Code(s) (comma separated): <input id="units" required placeholder="e.g. CHC001, CHC002"></label>
+      <label>Year: <input id="year" required placeholder="e.g. 2025"></label>
+      <label>Unit Name (if single): <input id="unitName" placeholder="Single unit title"></label>
+      <label>Cluster Name (if cluster): <input id="cluster" placeholder="Shown when >1 unit"></label>
+      <label>Campus: <input id="campus" placeholder="e.g. PRE, EPP"></label>
+      <label>Semester: <input id="semester" placeholder="S1 or S2"></label>
+    </div>
+
+    <fieldset>
+      <legend>Flags</legend>
+      <label><input type="checkbox" id="flagProd" checked> Production ready</label>
+      <label><input type="checkbox" id="flagUnderReview"> Under review</label>
+      <label><input type="checkbox" id="flagOffshore" onchange="toggleOffshore()"> Offshore</label>
+      <label><input type="checkbox" id="flagDEV"> DEV</label>
+      <label><input type="checkbox" id="flagUIE"> UIE (Used in Error)</label>
+      <label><input type="checkbox" id="flagTemplate"> Template</label>
+      <label><input type="checkbox" id="flagSandpit" onchange="toggleSandpit()"> Sandpit</label>
+
+      <div id="offshoreExtra" class="hide">
+        <label>Partner Abbreviation (e.g. FMP, SA): <input id="partner"></label>
+      </div>
+      <div id="sandpitExtra" class="hide">
+        <label>User Full Name (for Sandpit): <input id="sandpitUser" placeholder="e.g. Jane Doe"></label>
+      </div>
+    </fieldset>
+
+    <div>
+      <button type="button" onclick="generateNames()">Generate Names</button>
+      <button type="button" onclick="decodeShortName()">Decode ShortName</button>
+    </div>
+  </form>
+
+  <pre id="output"></pre>
+
+  <script>
+    function toggleOffshore(){
+      document.getElementById('offshoreExtra').classList.toggle('hide', !document.getElementById('flagOffshore').checked);
+    }
+    function toggleSandpit(){
+      document.getElementById('sandpitExtra').classList.toggle('hide', !document.getElementById('flagSandpit').checked);
+    }
+
+    function generateNames() {
+      const data = getFormData();
+
+      // Sandpit special-case validation
+      if (data.flags.sandpit) {
+        if (!data.sandpitUser || !data.year) {
+          return setOut('Error: Sandpit requires User Full Name and Year.');
+        }
+        const fn = `Sandpit ${toTitleCase(data.sandpitUser)} – ${data.year}`;
+        const sn = `SANDPIT||${data.sandpitUser.replace(/\s+/g,'').toUpperCase()}-${yyFromYear(data.year)}`;
+        return setOut(render(sn, fn));
+      }
+
+      // Standard requireds
+      if (!data.qual || !data.units.length || !data.year || (!data.unitName && data.units.length === 1 ? false : !data.clusterName && data.units.length > 1)){
+        return setOut('Error: Missing required fields. (Qual, Units, Year, and Unit Name or Cluster Name)');
+      }
+
+      const sn = generateShortName(data);
+      const fn = generateFullName(data);
+      setOut(render(sn, fn));
+    }
+
+    function decodeShortName() {
+      const sn = prompt('Enter short name to decode:');
+      if (!sn || !sn.includes('||')) return setOut('Error: Invalid short name format.');
+      const [left, right] = sn.split('||');
+      const [qualCode, stream] = left.includes('-') ? left.split('-') : [left, null];
+      const parts = right.split('-');
+      const year = parts.pop();
+      let semester = null, campus = null;
+      if (['S1','S2'].includes(parts[parts.length-1])) semester = parts.pop();
+      if (parts.length > 1) campus = parts.pop();
+      const unitCodes = parts.join('-').split('_');
+      setOut(`Decoded:\nQualificationCode: ${qualCode}\nStream: ${stream||''}\nUnitCodes: ${unitCodes.join(', ')}\nCampus: ${campus||''}\nSemester: ${semester||''}\nYear: ${year}`);
+    }
+
+    function getFormData() {
+      return {
+        qual: val('qual'),
+        stream: val('stream') || null,
+        units: val('units').split(',').map(s=>s.trim()).filter(Boolean),
+        unitName: val('unitName') || null,
+        clusterName: val('cluster') || null,
+        campus: val('campus') || null,
+        semester: val('semester') || null,
+        year: val('year'),
+        partner: val('partner') || null,
+        sandpitUser: val('sandpitUser') || null,
+        flags: {
+          prod: document.getElementById('flagProd').checked,
+          underReview: document.getElementById('flagUnderReview').checked,
+          offshore: document.getElementById('flagOffshore').checked,
+          dev: document.getElementById('flagDEV').checked,
+          uie: document.getElementById('flagUIE').checked,
+          template: document.getElementById('flagTemplate').checked,
+          sandpit: document.getElementById('flagSandpit').checked,
+        }
+      };
+    }
+
+    function generateShortName(d){
+      // Prefixes for types
+      const typePrefixes = [];
+      if (d.flags.dev) typePrefixes.push('DEV|');
+      if (d.flags.uie) typePrefixes.push('UIE|');
+      if (d.flags.template) typePrefixes.push('TEMPLATE|');
+      if (d.flags.sandpit) typePrefixes.push('SANDPIT||'); // handled earlier
+
+      const qual = d.qual + (d.stream ? `-${d.stream}` : '');
+      let units = d.units.join('_');
+      if (d.flags.offshore && d.partner) units += `_${d.partner}`; // offshore suffix before -YEAR
+
+      let right = [units, d.campus, d.semester, d.year].filter(Boolean).join('-');
+
+      // Production vs Under Review markers (non-breaking, optional)
+      if (!d.flags.prod) right = right.replace(`-${d.year}`, `-DRAFT-${d.year}`);
+      if (d.flags.underReview) right = right.replace(`-${d.year}`, `-UR-${d.year}`);
+
+      return `${typePrefixes.join('')}${qual}||${right}`;
+    }
+
+    function generateFullName(d){
+      const isCluster = d.units.length > 1;
+      // Unit section rules: show unit codes only when <= 2, else cluster name only
+      const unitSection = isCluster
+        ? (d.units.length <= 2 ? `${d.clusterName} (${d.units.join(', ')})` : `${d.clusterName}`)
+        : `${d.units[0]} ${d.unitName}`;
+
+      // Left-side qualifiers/prefixes
+      const prefixBits = [];
+      if (d.flags.dev) prefixBits.push('[DEV]');
+      if (d.flags.uie) prefixBits.push('[UIE]');
+      if (d.flags.underReview) prefixBits.push('[Under Review]');
+      let left = `${prefixBits.join(' ')} ${[d.qual, d.stream].filter(Boolean).join(' ')}`.trim();
+      if (d.flags.template) left = `Template: ${[d.qual, d.stream].filter(Boolean).join(' ')}`;
+      if (d.flags.sandpit) return `Sandpit ${toTitleCase(d.sandpitUser)} – ${d.year}`; // already handled above for SN
+
+      // Offshore partner tag appended to unit block
+      const partnerTag = (d.flags.offshore && d.partner) ? ` (${d.partner})` : '';
+
+      const tailBits = [d.campus, d.semester ? `Semester ${d.semester.slice(1)}` : null, d.year].filter(Boolean).join(', ');
+      return `${left} – ${unitSection}${partnerTag} – ${tailBits}`;
+    }
+
+    // Helpers
+    function val(id){ return document.getElementById(id)?.value.trim() || ''; }
+    function setOut(t){ document.getElementById('output').textContent = t; }
+    function render(sn, fn){ return `Short Name: ${sn}\nFull Name: ${fn}`; }
+    function yyFromYear(y){ return (''+y).slice(-2).padStart(2,'0'); }
+    function toTitleCase(s){ return s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()); }
+  </script>
+</body>
+</html>
